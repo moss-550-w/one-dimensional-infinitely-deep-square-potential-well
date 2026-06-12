@@ -4,6 +4,8 @@
   "version": "2.0.0",
   "type": "module",
   "description": "一维无限深方势阱思想之旅 — 沉浸式科学教育网站",
+  "author": "MOSS",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

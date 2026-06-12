@@ -15,7 +15,16 @@ import {
   basisFunction,
   basisProduct,
   innerProduct,
-  partialInnerProduct
+  partialInnerProduct,
+  superposeComplex,
+  probabilityDensity,
+  energyProbabilities,
+  collapseToEigenstate,
+  weightedStd,
+  gaussianPacket,
+  gaussianMomentumStd,
+  momentumAmplitude,
+  momentumDensity
 } from './QuantumMath.js';
 
 describe('QuantumMath · 本征能量', () => {
@@ -198,5 +207,129 @@ describe('QuantumMath · 希尔伯特内积与正交性', () => {
     const full = partialInnerProduct(1, 2, 1);
     expect(Math.abs(full)).toBeLessThan(1e-6);
     expect(Math.abs(mid)).toBeGreaterThan(1e-3);
+  });
+});
+
+describe('QuantumMath · 含时演化与概率密度', () => {
+  it('t=0 时复波函数退化为实值（虚部为 0）', () => {
+    const c = [Math.SQRT1_2, Math.SQRT1_2];
+    const { re, im } = superposeComplex(c, 0.3, 0);
+    expect(im).toBeCloseTo(0, 12);
+    expect(re).toBeCloseTo(superpose(c, 0.3), 12);
+  });
+
+  it('纯本征态概率密度不随时间变化（定态）', () => {
+    // 纯 ψ_2：|ψ|² = |c|²ψ_2(x)²，相位模长恒为 1
+    const d0 = probabilityDensity([0, 1], 0.3, 0);
+    const dT = probabilityDensity([0, 1], 0.3, 1.7);
+    expect(dT).toBeCloseTo(d0, 10);
+  });
+
+  it('叠加态概率密度随时间演化（干涉项振荡）', () => {
+    const c = [Math.SQRT1_2, Math.SQRT1_2];
+    const d0 = probabilityDensity(c, 0.3, 0);
+    const dT = probabilityDensity(c, 0.3, 0.2);
+    expect(Math.abs(dT - d0)).toBeGreaterThan(1e-3);
+  });
+
+  it('含时演化保持归一化 ∫|ψ(x,t)|²dx = 1', () => {
+    const c = [0.6, 0.8]; // Σ|c|²=1
+    for (const t of [0, 0.5, 1.3]) {
+      const norm = integrate((x) => probabilityDensity(c, x, t), 0, 1);
+      expect(norm).toBeCloseTo(1, 6);
+    }
+  });
+});
+
+describe('QuantumMath · 能量测量概率与坍缩', () => {
+  it('energyProbabilities 为 |c_n|² 且总和为 1', () => {
+    const p = energyProbabilities([0.6, 0.8]);
+    expect(p[0]).toBeCloseTo(0.36, 12);
+    expect(p[1]).toBeCloseTo(0.64, 12);
+    expect(p[0] + p[1]).toBeCloseTo(1, 12);
+  });
+
+  it('未归一化系数也归一为合法分布', () => {
+    const p = energyProbabilities([1, 1]);
+    expect(p).toEqual([0.5, 0.5]);
+  });
+
+  it('坍缩抽样确定性：纯态必坍缩到该本征态', () => {
+    expect(collapseToEigenstate([0, 1], () => 0.99)).toBe(1);
+    expect(collapseToEigenstate([1, 0], () => 0.99)).toBe(0);
+  });
+
+  it('坍缩抽样按 |c_n|² 选择对应分桶（rng 可注入）', () => {
+    const c = [0.6, 0.8]; // P=[0.36,0.64]
+    expect(collapseToEigenstate(c, () => 0.2)).toBe(0); // 0.2 < 0.36
+    expect(collapseToEigenstate(c, () => 0.5)).toBe(1); // 0.36 ≤ 0.5
+  });
+
+  it('大样本坍缩频率收敛到理论概率', () => {
+    const c = [0.6, 0.8]; // P=[0.36,0.64]
+    // 线性同余发生器：确定性可复现
+    let seed = 12345;
+    const rng = () => {
+      seed = (1103515245 * seed + 12345) % 2147483648;
+      return seed / 2147483648;
+    };
+    const counts = [0, 0];
+    const N = 20000;
+    for (let i = 0; i < N; i++) counts[collapseToEigenstate(c, rng)]++;
+    expect(counts[0] / N).toBeCloseTo(0.36, 1);
+    expect(counts[1] / N).toBeCloseTo(0.64, 1);
+  });
+});
+
+describe('QuantumMath · 不确定性原理（波包与动量变换）', () => {
+  it('weightedStd 计算加权均值与标准差', () => {
+    // 对称双点 ±1 等权：均值 0，标准差 1
+    const { mean, std } = weightedStd([-1, 1], [1, 1]);
+    expect(mean).toBeCloseTo(0, 12);
+    expect(std).toBeCloseTo(1, 12);
+  });
+
+  it('高斯波包归一化 ∫|ψ|²dx ≈ 1（σ 远离边界）', () => {
+    const sigma = 0.05;
+    const norm = integrate((x) => gaussianPacket(x, 0.5, sigma) ** 2, 0, 1, 4000);
+    expect(norm).toBeCloseTo(1, 4);
+  });
+
+  it('高斯波包位置标准差 Δx ≈ σ（数值积分核对）', () => {
+    const sigma = 0.06;
+    const x0 = 0.5;
+    const w = (x) => gaussianPacket(x, x0, sigma) ** 2;
+    const mean = integrate((x) => x * w(x), 0, 1, 4000) / integrate(w, 0, 1, 4000);
+    const varr =
+      integrate((x) => (x - mean) ** 2 * w(x), 0, 1, 4000) / integrate(w, 0, 1, 4000);
+    expect(Math.sqrt(varr)).toBeCloseTo(sigma, 3);
+  });
+
+  it('动量标准差 Δp = ħ/(2σ)，与 Δx 乘积达海森堡下界 ħ/2', () => {
+    const sigma = 0.05;
+    const dp = gaussianMomentumStd(sigma);
+    expect(dp).toBeCloseTo(1 / (2 * sigma), 12);
+    expect(sigma * dp).toBeCloseTo(0.5, 12); // Δx·Δp = ħ/2 (ħ=1)
+  });
+
+  it('压缩位置 → 动量展宽（σ 越小 Δp 越大）', () => {
+    expect(gaussianMomentumStd(0.02)).toBeGreaterThan(gaussianMomentumStd(0.1));
+  });
+
+  it('momentumAmplitude/Density：高斯波包变换后峰值在 p=0', () => {
+    const sigma = 0.06;
+    const psi = (x) => gaussianPacket(x, 0.5, sigma);
+    const d0 = momentumDensity(psi, 0, 0, 1);
+    const dHigh = momentumDensity(psi, 40, 0, 1);
+    expect(d0).toBeGreaterThan(dHigh); // 中心动量密度最大
+  });
+
+  it('动量变换数值宽度随位置压缩而展宽', () => {
+    const wide = (x) => gaussianPacket(x, 0.5, 0.12); // 位置宽 → 动量窄
+    const narrow = (x) => gaussianPacket(x, 0.5, 0.04); // 位置窄 → 动量宽
+    // 在中等动量 p=15 处：窄波包(动量宽)残留更多密度
+    const dWide = momentumDensity(wide, 15, 0, 1);
+    const dNarrow = momentumDensity(narrow, 15, 0, 1);
+    expect(dNarrow).toBeGreaterThan(dWide);
   });
 });

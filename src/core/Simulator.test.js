@@ -71,6 +71,56 @@ describe('Simulator · 状态机', () => {
     sim.dispose();
   });
 
+  it('阶段3装载量子公理场，盒子可见', () => {
+    const bus = new StateBus();
+    const sim = new Simulator({ bus });
+    sim.setStage(STAGE.QUANTUM_AXIOM);
+    expect(sim.field.object3d.name).toBe('quantum-axiom-field');
+    // 阶段3回到盒中观察波函数，盒子重新可见
+    expect(sim.wellMesh.visible).toBe(true);
+    sim.dispose();
+  });
+
+  it('阶段3可演化、制备、坍缩、重置而不报错', () => {
+    const bus = new StateBus();
+    const sim = new Simulator({ bus });
+    sim.setStage(STAGE.QUANTUM_AXIOM);
+    const field = sim.field;
+    expect(() => {
+      sim.update(0.016);
+      field.prepare([0.5, 0.5, 0.7]);
+      sim.update(0.016);
+      field.collapse(1);
+      sim.update(0.016);
+      field.reset();
+    }).not.toThrow();
+    sim.dispose();
+  });
+
+  it('阶段3制备态系数严格归一化（单位球面约束）', () => {
+    const bus = new StateBus();
+    const sim = new Simulator({ bus });
+    sim.setStage(STAGE.QUANTUM_AXIOM);
+    sim.field.prepare([0.3, 0.4, 0.5]);
+    const c = sim.field.getCoefficients();
+    expect(Math.hypot(c[0], c[1], c[2])).toBeCloseTo(1, 10);
+    sim.dispose();
+  });
+
+  it('阶段3坍缩为纯本征态（不可逆，单分量为 1）', () => {
+    const bus = new StateBus();
+    const sim = new Simulator({ bus });
+    sim.setStage(STAGE.QUANTUM_AXIOM);
+    sim.field.prepare([0.5, 0.5, 0.7]);
+    sim.field.collapse(2);
+    const c = sim.field.getCoefficients();
+    expect(c[2]).toBeCloseTo(1, 10);
+    expect(c[0]).toBeCloseTo(0, 10);
+    expect(c[1]).toBeCloseTo(0, 10);
+    expect(sim.field.collapsed).toBe(true);
+    sim.dispose();
+  });
+
   it('setStage 到当前阶段为幂等空操作', () => {
     const bus = new StateBus();
     const sim = new Simulator({ bus });

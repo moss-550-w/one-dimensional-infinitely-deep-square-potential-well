@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ClassicalField } from './ClassicalField.js';
 import { ModeDecompositionField } from './ModeDecompositionField.js';
 import { HilbertProjectionField } from './HilbertProjectionField.js';
+import { QuantumAxiomField } from './QuantumAxiomField.js';
 
 /**
  * 核心模拟器阶段枚举（Claude.md 5.2）。
@@ -85,8 +86,10 @@ export class Simulator {
       this.stageModule = new ModeDecompositionField({ halfExtents: this.half });
     } else if (stage === STAGE.GEOMETRIC_PROJECTION) {
       this.stageModule = new HilbertProjectionField({ halfExtents: this.half });
+    } else if (stage === STAGE.QUANTUM_AXIOM) {
+      this.stageModule = new QuantumAxiomField({ halfExtents: this.half });
     }
-    // 阶段 3 的可视化模块将在 M4 接入
+    // 阶段 3 由 QuantumAxiomField 承载（第四章接入）
     if (this.stageModule) this.group.add(this.stageModule.object3d);
 
     // 阶段2「切换视角」到抽象投影空间：盒子隐去，投影占据中央（design.md 阶段2）

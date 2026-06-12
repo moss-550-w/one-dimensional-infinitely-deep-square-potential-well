@@ -247,6 +247,160 @@ export function partialInnerProduct(m, n, upper, opts = {}) {
   return (2 / L) * integrate((x) => basisProduct(m, n, x, opts), 0, upper);
 }
 
+/* ===== 量子公理（第四章：微观的实在） ===== */
+
+/**
+ * 含时复波函数 ψ(x,t) = Σ cₙ ψₙ(x)·exp(−iEₙt/ħ)（Claude.md 六·4）。
+ * 制备态系数 cₙ 取实值；时间相位 exp(−iθ)=cosθ−i·sinθ 引入复数，
+ * 不同能量本征态以各自频率 Eₙ/ħ 演化，相互干涉。
+ * @param {number[]} coeffs 实系数，coeffs[i] 对应量子数 n=i+1
+ * @param {number} x 位置
+ * @param {number} t 时间（t=0 即制备态，退化为实值）
+ * @param {{hbar?:number, mass?:number, wellWidth?:number}} [opts]
+ * @returns {{re:number, im:number}} 复振幅
+ */
+export function superposeComplex(coeffs, x, t, opts = {}) {
+  const { hbar } = { ...DEFAULTS, ...opts };
+  let re = 0;
+  let im = 0;
+  for (let i = 0; i < coeffs.length; i++) {
+    const n = i + 1;
+    const amp = coeffs[i] * eigenFunction(n, x, opts);
+    if (amp === 0) continue;
+    const theta = (eigenEnergy(n, opts) * t) / hbar;
+    re += amp * Math.cos(theta);
+    im -= amp * Math.sin(theta);
+  }
+  return { re, im };
+}
+
+/**
+ * 概率密度 |ψ(x,t)|² = Re² + Im²（玻恩规则，Claude.md 六·4）。
+ * 含时演化下其对 x 的积分守恒为 Σ|cₙ|²（相位模长恒为 1），故归一化不随时间破坏。
+ * @returns {number} 非负概率密度
+ */
+export function probabilityDensity(coeffs, x, t, opts = {}) {
+  const { re, im } = superposeComplex(coeffs, x, t, opts);
+  return re * re + im * im;
+}
+
+/**
+ * 能量测量概率分布 Pₙ = |cₙ|² / Σ|cₖ|²（Claude.md 六·4）。
+ * 对已归一化系数即 |cₙ|²；此处显式归一以容忍数值偏差，保证 ΣPₙ=1。
+ * @param {number[]} coeffs 实系数
+ * @returns {number[]} 概率数组，与 coeffs 等长，总和为 1
+ */
+export function energyProbabilities(coeffs) {
+  const sq = coeffs.map((c) => c * c);
+  const total = sq.reduce((a, v) => a + v, 0);
+  if (total === 0) return coeffs.map(() => 0);
+  return sq.map((v) => v / total);
+}
+
+/**
+ * 概率性测量坍缩：按 |cₙ|² 加权随机抽取一个本征态索引（Claude.md 六·4，不可逆的一次性投影）。
+ * rng 可注入以保证调试可复现（plan.md 风险登记：坍缩随机性可复现）。
+ * @param {number[]} coeffs 实系数
+ * @param {()=>number} [rng=Math.random] 返回 [0,1) 的随机源
+ * @returns {number} 坍缩到的本征态索引 i（对应量子数 n=i+1）
+ */
+export function collapseToEigenstate(coeffs, rng = Math.random) {
+  const probs = energyProbabilities(coeffs);
+  const r = rng();
+  let acc = 0;
+  for (let i = 0; i < probs.length; i++) {
+    acc += probs[i];
+    if (r < acc) return i;
+  }
+  // 浮点累计可能略小于 1，兜底返回最后一个非零分量
+  for (let i = probs.length - 1; i >= 0; i--) {
+    if (probs[i] > 0) return i;
+  }
+  return 0;
+}
+
+/**
+ * 离散分布的加权均值与标准差。用于从概率密度网格定量计算 Δx、Δp。
+ * @param {number[]} values 取值（如位置或动量网格）
+ * @param {number[]} weights 非负权重（如 |ψ|²，无需预先归一化）
+ * @returns {{mean:number, std:number}}
+ */
+export function weightedStd(values, weights) {
+  let wSum = 0;
+  let mean = 0;
+  for (let i = 0; i < values.length; i++) {
+    wSum += weights[i];
+    mean += values[i] * weights[i];
+  }
+  if (wSum === 0) return { mean: 0, std: 0 };
+  mean /= wSum;
+  let varSum = 0;
+  for (let i = 0; i < values.length; i++) {
+    const d = values[i] - mean;
+    varSum += weights[i] * d * d;
+  }
+  return { mean, std: Math.sqrt(varSum / wSum) };
+}
+
+/**
+ * 最小不确定性高斯波包振幅 ψ(x) = (2πσ²)^(−1/4)·exp(−(x−x₀)²/(4σ²))。
+ *
+ * 简化说明（Claude.md 九·5）：这是**自由空间**的最小不确定性波包，位置标准差 Δx=σ。
+ * 第四章用它演示「位置压缩 → 动量展宽」的不确定性关系；当 σ≪L 且波包远离阱壁时，
+ * 其与无限深势阱本征基的展开近似成立，故作为不确定性原理的定量演示是诚实的。
+ * @param {number} x 位置
+ * @param {number} x0 波包中心
+ * @param {number} sigma 位置标准差（>0）
+ * @returns {number} 实值振幅
+ */
+export function gaussianPacket(x, x0, sigma) {
+  if (sigma <= 0) throw new RangeError(`sigma 必须为正，收到: ${sigma}`);
+  const norm = Math.pow(2 * Math.PI * sigma * sigma, -0.25);
+  const d = x - x0;
+  return norm * Math.exp(-(d * d) / (4 * sigma * sigma));
+}
+
+/**
+ * 最小不确定性波包的动量标准差解析值 Δp = ħ/(2σ)。
+ * 与 gaussianPacket 的 Δx=σ 相乘恰得 Δx·Δp = ħ/2（海森堡下界）。
+ * @param {number} sigma 位置标准差
+ * @param {{hbar?:number}} [opts]
+ * @returns {number}
+ */
+export function gaussianMomentumStd(sigma, opts = {}) {
+  if (sigma <= 0) throw new RangeError(`sigma 必须为正，收到: ${sigma}`);
+  const { hbar } = { ...DEFAULTS, ...opts };
+  return hbar / (2 * sigma);
+}
+
+/**
+ * 位置波函数到动量空间的数值傅里叶变换：
+ *   φ(p) = (1/√(2πħ)) ∫ₐᵇ ψ(x)·exp(−ipx/ħ) dx。
+ * 对实值 ψ(x) 分别用 Simpson 积分计算实部/虚部（Claude.md 六·4：动量表象即傅里叶变换）。
+ * @param {(x:number)=>number} psiFn 实值位置波函数
+ * @param {number} p 动量
+ * @param {number} a 积分下限
+ * @param {number} b 积分上限
+ * @param {{hbar?:number, steps?:number}} [opts]
+ * @returns {{re:number, im:number}} 动量空间复幅度
+ */
+export function momentumAmplitude(psiFn, p, a, b, opts = {}) {
+  const { hbar, steps = 1000 } = { ...DEFAULTS, ...opts };
+  const pref = 1 / Math.sqrt(2 * Math.PI * hbar);
+  const re = pref * integrate((x) => psiFn(x) * Math.cos((p * x) / hbar), a, b, steps);
+  const im = pref * integrate((x) => -psiFn(x) * Math.sin((p * x) / hbar), a, b, steps);
+  return { re, im };
+}
+
+/**
+ * 动量概率密度 |φ(p)|²。用于动量表象与波包压缩演示。
+ * @returns {number}
+ */
+export function momentumDensity(psiFn, p, a, b, opts = {}) {
+  const { re, im } = momentumAmplitude(psiFn, p, a, b, opts);
+  return re * re + im * im;
+}
+
 /** 量子数校验：必须为正整数。 */
 function assertQuantumNumber(n) {
   if (!Number.isInteger(n) || n < 1) {

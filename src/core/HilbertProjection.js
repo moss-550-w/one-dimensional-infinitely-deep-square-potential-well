@@ -150,10 +150,15 @@ export class HilbertProjection {
   /**
    * 球坐标约束算法：将相机射线约束到单位球面，取球面方向为新系数，
    * 端点恒在单位球面（严格满足归一化）。
+   *
+   * 球心取本组件的世界坐标（getWorldPosition），因此组件被父级平移到任意位置
+   * （如阶段3矢量上浮到盒顶）后，拖拽仍精确命中球面，不产生偏移。
    * @param {THREE.Raycaster} raycaster 已 setFromCamera 的射线投射器
    */
   dragToRay(raycaster) {
-    const o = raycaster.ray.origin;
+    // 将射线平移到「以球心为原点」的坐标系：方向不变，仅原点减去球心
+    const center = this.group.getWorldPosition(new THREE.Vector3());
+    const o = raycaster.ray.origin.clone().sub(center);
     const d = raycaster.ray.direction;
     const b = o.dot(d);
     const c = o.dot(o) - this.radius * this.radius;

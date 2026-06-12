@@ -140,6 +140,11 @@ export class ClassicalField {
     return null;
   }
 
+  /** 阶段模块统一根对象接口（供 Simulator 挂载/卸载）。 */
+  get object3d() {
+    return this.mesh;
+  }
+
   dispose() {
     this.mesh.geometry.dispose();
     this.mesh.material.dispose();

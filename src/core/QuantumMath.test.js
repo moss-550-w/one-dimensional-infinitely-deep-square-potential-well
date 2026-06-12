@@ -6,7 +6,12 @@ import {
   superpose,
   integrate,
   normalizationOf,
-  isCoefficientSetNormalized
+  isCoefficientSetNormalized,
+  GIBBS_CONSTANT,
+  squareWaveCoefficient,
+  synthesizeHarmonics,
+  fourierSquareWave,
+  gibbsPeak
 } from './QuantumMath.js';
 
 describe('QuantumMath · 本征能量', () => {
@@ -96,5 +101,53 @@ describe('QuantumMath · 叠加与归一化', () => {
     expect(isCoefficientSetNormalized([Math.SQRT1_2, Math.SQRT1_2])).toBe(true);
     expect(isCoefficientSetNormalized([0.6, 0.8])).toBe(true);
     expect(isCoefficientSetNormalized([1, 1])).toBe(false);
+  });
+});
+
+describe('QuantumMath · 傅里叶方波与吉布斯现象', () => {
+  it('方波系数 b_n = 4/(πn), n=2k−1', () => {
+    expect(squareWaveCoefficient(1)).toBeCloseTo(4 / Math.PI, 12);
+    expect(squareWaveCoefficient(2)).toBeCloseTo(4 / (3 * Math.PI), 12);
+    expect(squareWaveCoefficient(3)).toBeCloseTo(4 / (5 * Math.PI), 12);
+  });
+
+  it('部分和在区间内部收敛到 1', () => {
+    for (const x of [0.25, 0.5, 0.75]) {
+      expect(fourierSquareWave(200, x)).toBeCloseTo(1, 2);
+    }
+  });
+
+  it('端点强制为 0（正弦基边界条件）', () => {
+    expect(fourierSquareWave(20, 0)).toBeCloseTo(0, 12);
+    expect(fourierSquareWave(20, 1)).toBeCloseTo(0, 10);
+  });
+
+  it('Wilbraham–Gibbs 常数与积分定义自洽 (2/π)·Si(π)', () => {
+    const Si = integrate((t) => (t === 0 ? 1 : Math.sin(t) / t), 0, Math.PI, 4000);
+    expect((2 / Math.PI) * Si).toBeCloseTo(GIBBS_CONSTANT, 6);
+  });
+
+  it('吉布斯过冲峰趋近 G≈1.179，且不随 N 消失', () => {
+    // 真实峰值约 1.179（超出收敛值 1 约 17.9%），绝非完美逼近
+    expect(gibbsPeak(20).value).toBeGreaterThan(1.17);
+    expect(gibbsPeak(20).value).toBeLessThan(1.19);
+    // N 增大单调趋近 G 而非趋近 1
+    expect(gibbsPeak(200).value).toBeGreaterThan(1.17);
+    expect(Math.abs(gibbsPeak(200).value - GIBBS_CONSTANT)).toBeLessThan(0.01);
+  });
+
+  it('过冲峰随 N 增大向跳变点靠拢且峰值单调下降趋近 G', () => {
+    expect(gibbsPeak(40).x).toBeLessThan(gibbsPeak(10).x);
+    expect(gibbsPeak(40).value).toBeLessThan(gibbsPeak(10).value);
+    expect(gibbsPeak(40).value).toBeGreaterThan(GIBBS_CONSTANT - 0.01);
+  });
+
+  it('synthesizeHarmonics 与理想部分和等价（同系数同相位）', () => {
+    const harmonics = [1, 2, 3].map((k) => ({
+      n: 2 * k - 1,
+      amplitude: squareWaveCoefficient(k),
+      phase: 0
+    }));
+    expect(synthesizeHarmonics(harmonics, 0.3)).toBeCloseTo(fourierSquareWave(3, 0.3), 12);
   });
 });

@@ -111,6 +111,93 @@ export function isCoefficientSetNormalized(coeffs, tol = 1e-6) {
   return Math.abs(sum - 1) < tol;
 }
 
+/* ===== 傅里叶分析（第二章：波的语言） ===== */
+
+/**
+ * Wilbraham–Gibbs 常数 (2/π)·Si(π) ≈ 1.17898。
+ *
+ * 物理含义：对纯正弦基 sin(nπx/L) 展开「在 (0,L) 内取值 1」的目标函数，
+ * 端点 x=0,L 处级数恒为 0（sin 为零），故端点附近存在 0→1 的跳变。
+ * 部分和在该跳变邻域的过冲峰极限值即为本常数 ≈1.17898 —— 即超出收敛值 1
+ * 约 17.9%。该过冲量恰为「跳变幅度」的 8.949%（0.0894898…），这正是
+ * Claude.md 标注 1.08949 的来源：它对应「0→1 半幅方波」的峰值 (1+G)/2。
+ *
+ * 关键诚实性（Claude.md 二·5 / 六·2）：本项目用纯正弦级数逼近「值为 1」的方波，
+ * 其曲线真实峰值就是 ≈1.179，过冲不随项数 N 消失，绝不可"假装完美逼近"。
+ */
+export const GIBBS_CONSTANT = 1.1789797444721673;
+
+/**
+ * 方波正弦级数第 k 个奇谐波（次数 n=2k−1）的理想振幅 b_n = 4/(πn)。
+ * @param {number} k 谐波序号（正整数，对应次数 n=2k−1）
+ * @returns {number}
+ */
+export function squareWaveCoefficient(k) {
+  assertQuantumNumber(k);
+  return 4 / (Math.PI * (2 * k - 1));
+}
+
+/**
+ * 合成任意一组谐波在位置 x 的取值：Σ aₘ·sin(nₘπx/L + φₘ)。
+ * 用于谐波工作台 —— 每个谐波的振幅/相位可被用户独立调节。
+ * @param {Array<{n:number, amplitude:number, phase?:number}>} harmonics
+ * @param {number} x 位置
+ * @param {{wellWidth?:number}} [opts]
+ * @returns {number}
+ */
+export function synthesizeHarmonics(harmonics, x, opts = {}) {
+  const { wellWidth: L } = { ...DEFAULTS, ...opts };
+  let s = 0;
+  for (const h of harmonics) {
+    s += h.amplitude * Math.sin((h.n * Math.PI * x) / L + (h.phase || 0));
+  }
+  return s;
+}
+
+/**
+ * 前 N 个奇谐波的理想方波部分和：
+ *   f_N(x) = Σ_{k=1}^N 4/(π(2k−1)) · sin((2k−1)πx/L)
+ * 在 (0,L) 内收敛到 1；端点强制为 0，故跳变处必现吉布斯过冲。
+ * @param {number} N 谐波项数（正整数）
+ * @param {number} x 位置
+ * @param {{wellWidth?:number}} [opts]
+ * @returns {number}
+ */
+export function fourierSquareWave(N, x, opts = {}) {
+  assertQuantumNumber(N);
+  const { wellWidth: L } = { ...DEFAULTS, ...opts };
+  let s = 0;
+  for (let k = 1; k <= N; k++) {
+    const n = 2 * k - 1;
+    s += (4 / (Math.PI * n)) * Math.sin((n * Math.PI * x) / L);
+  }
+  return s;
+}
+
+/**
+ * 数值求前 N 项部分和在 (0, L/2] 上的首个（全局最大）过冲峰。
+ * @param {number} N 谐波项数
+ * @param {{wellWidth?:number}} [opts]
+ * @returns {{x:number, value:number}} 峰位置与峰值。value 随 N 增大趋近
+ *   GIBBS_CONSTANT 而非收敛到 1 —— 过冲永不消失，只是越来越靠近跳变点。
+ */
+export function gibbsPeak(N, opts = {}) {
+  assertQuantumNumber(N);
+  const { wellWidth: L } = { ...DEFAULTS, ...opts };
+  const samples = 5000;
+  let bestX = 0;
+  let bestV = -Infinity;
+  for (let i = 1; i <= samples; i++) {
+    const x = (i / samples) * (L / 2);
+    const v = fourierSquareWave(N, x, opts);
+    if (v > bestV) {
+      bestV = v;
+      bestX = x;
+    }
+  }
+  return { x: bestX, value: bestV };
+}
+
 /** 量子数校验：必须为正整数。 */
 function assertQuantumNumber(n) {
   if (!Number.isInteger(n) || n < 1) {

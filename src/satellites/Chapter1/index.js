@@ -24,6 +24,7 @@ export class Chapter1Scene extends SceneBase {
 
   onInit(ctx) {
     const { camera, renderer, bus } = ctx;
+    this.bus = bus;
 
     // 核心模拟器（阶段0）
     this.simulator = new Simulator({ bus });
@@ -188,6 +189,15 @@ export class Chapter1Scene extends SceneBase {
       }
     });
     this._panels.push(msg);
+
+    // 通往第二章的出口：去寻找这门"语言"
+    const btn = createButton({
+      label: '寻找这门语言 →',
+      onClick: () => this.bus.emit('navigate', { to: 2 })
+    });
+    btn.style.marginTop = '14px';
+    msg.querySelector('div').appendChild(btn);
+
     gsap.to(msg, { opacity: 1, duration: 1.6, ease: 'power2.out' });
 
     // 恢复轨道控制，允许用户继续观察盒中持续的混沌

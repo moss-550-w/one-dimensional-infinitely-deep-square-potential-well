@@ -27,8 +27,21 @@ describe('Simulator · 状态机', () => {
     sim.setStage(STAGE.MODE_DECOMPOSITION);
     expect(sim.currentStage).toBe(STAGE.MODE_DECOMPOSITION);
     expect(bus.getState().currentStage).toBe(STAGE.MODE_DECOMPOSITION);
-    // 阶段0粒子场应已被卸载
-    expect(sim.field).toBeNull();
+    // 阶段0粒子场应已卸载，换装为阶段1模式分解模块
+    expect(sim.field).not.toBeNull();
+    expect(sim.field.object3d.name).toBe('mode-decomposition');
+    sim.dispose();
+  });
+
+  it('阶段1模式分解模块可演化与展开而不报错', () => {
+    const bus = new StateBus();
+    const sim = new Simulator({ bus });
+    sim.setStage(STAGE.MODE_DECOMPOSITION);
+    expect(() => {
+      sim.update(0.016);
+      sim.field.setExploded(true);
+      sim.update(0.016);
+    }).not.toThrow();
     sim.dispose();
   });
 

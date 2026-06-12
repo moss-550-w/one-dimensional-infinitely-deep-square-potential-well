@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ClassicalField } from './ClassicalField.js';
+import { ModeDecompositionField } from './ModeDecompositionField.js';
 
 /**
  * 核心模拟器阶段枚举（Claude.md 5.2）。
@@ -79,14 +80,16 @@ export class Simulator {
     this._disposeStageModule();
     if (stage === STAGE.CLASSICAL_CHAOS) {
       this.stageModule = new ClassicalField({ halfExtents: this.half, tier: this.tier });
-      this.group.add(this.stageModule.mesh);
+    } else if (stage === STAGE.MODE_DECOMPOSITION) {
+      this.stageModule = new ModeDecompositionField({ halfExtents: this.half });
     }
-    // 阶段 1–3 的可视化模块将在 M2–M4 接入
+    // 阶段 2–3 的可视化模块将在 M3–M4 接入
+    if (this.stageModule) this.group.add(this.stageModule.object3d);
   }
 
   _disposeStageModule() {
     if (this.stageModule) {
-      this.group.remove(this.stageModule.mesh);
+      this.group.remove(this.stageModule.object3d);
       this.stageModule.dispose();
       this.stageModule = null;
     }
@@ -119,7 +122,7 @@ export class Simulator {
     if (this.stageModule) this.stageModule.update(dt);
   }
 
-  /** 暴露阶段0粒子场，供章节交互（如逃逸动画）调用。 */
+  /** 暴露当前阶段可视化模块（阶段0：ClassicalField；阶段1：ModeDecompositionField）。 */
   get field() {
     return this.stageModule;
   }

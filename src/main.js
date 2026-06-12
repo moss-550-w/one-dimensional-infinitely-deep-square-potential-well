@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { stateBus } from './core/StateBus.js';
 import { Chapter1Scene } from './satellites/Chapter1/index.js';
+import { Chapter2Scene } from './satellites/Chapter2/index.js';
 import './style.css';
 
 /**
@@ -112,10 +113,31 @@ const canvas = document.getElementById('app-canvas');
 const manager = new SceneManager(canvas);
 manager.start();
 
-// 加载第一章（核心模拟器阶段0：经典混沌）
-manager.load(new Chapter1Scene());
+// 章节注册表：卫星空间按需加载/销毁（Claude.md 四·4）
+const CHAPTERS = {
+  1: Chapter1Scene,
+  2: Chapter2Scene
+};
+
+/** 切换到指定章节，销毁当前场景并加载目标场景。 */
+function navigateTo(n) {
+  const Ctor = CHAPTERS[n];
+  if (!Ctor) {
+    console.warn(`[main] 第 ${n} 章尚未实现，导航忽略。`);
+    return;
+  }
+  manager.load(new Ctor());
+  stateBus.setState({ currentChapter: n });
+  console.info(`[main] 已进入第 ${n} 章。`);
+}
+
+// 统一章节导航入口：任意场景通过 bus.emit('navigate', { to }) 请求切换
+stateBus.on('navigate', ({ to }) => navigateTo(to));
+
+// 从第一章启程
+navigateTo(1);
 
 // 暴露到全局，便于开发期调试与后续章节挂载
-window.__app = { manager, stateBus };
+window.__app = { manager, stateBus, navigateTo };
 
-console.info('[main] 核心管线就绪 — 第一章「经典混沌」已加载。');
+console.info('[main] 核心管线就绪 — 思想之旅启程。');

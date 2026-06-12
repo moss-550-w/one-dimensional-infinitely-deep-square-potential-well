@@ -16,6 +16,12 @@ import * as THREE from 'three';
  * @returns {THREE.Sprite}
  */
 export function makeTextSprite(text, { color = '#e2e8f0', fontSize = 44, worldHeight = 0.18 } = {}) {
+  // 无 DOM 环境（如 node 单测）降级：返回无纹理占位 Sprite，保持 3D 结构完整、
+  // 逻辑可测，而不依赖 Canvas 2D API。浏览器中走下方正常文字渲染路径。
+  if (typeof document === 'undefined') {
+    return new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false }));
+  }
+
   const font = `${fontSize}px JetBrains Mono, monospace`;
   const pad = Math.round(fontSize * 0.3);
 

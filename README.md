@@ -2,6 +2,7 @@
 
 > 一个以「一维无限深方势阱」为唯一物理系统的沉浸式 3D 科学教育网站。它不是线性的物理教科书，而是一次**认知发现之旅**——引导用户从「盒中粒子的混沌」出发，亲历困惑、寻语、顿悟、反思，去发现数学语言（傅里叶分析、希尔伯特空间、量子公理）如何被人类建构出来描述量子世界。
 
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-live-222?logo=githubpages)](https://moss-550-w.github.io/one-dimensional-infinitely-deep-square-potential-well/)
 [![tests](https://img.shields.io/badge/tests-107%20passing-22c55e)]()
 [![milestones](https://img.shields.io/badge/milestones-M0–M6%20done-3b82f6)]()
 [![license](https://img.shields.io/badge/license-MIT-8b5cf6)]()

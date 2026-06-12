@@ -45,6 +45,32 @@ describe('Simulator · 状态机', () => {
     sim.dispose();
   });
 
+  it('阶段2装载几何投影并隐藏盒子', () => {
+    const bus = new StateBus();
+    const sim = new Simulator({ bus });
+    sim.setStage(STAGE.GEOMETRIC_PROJECTION);
+    expect(sim.field.object3d.name).toBe('hilbert-projection-field');
+    expect(sim.wellMesh.visible).toBe(false);
+    expect(sim.wellEdges.visible).toBe(false);
+    // 投影可拖拽并联动波形而不报错
+    expect(() => {
+      sim.field.projection.setCoefficients([0.3, 0.4, 0.5]);
+    }).not.toThrow();
+    // 系数严格归一化（单位球面约束）
+    const c = sim.field.projection.getCoefficients();
+    expect(Math.hypot(c[0], c[1], c[2])).toBeCloseTo(1, 10);
+    sim.dispose();
+  });
+
+  it('从阶段2切回非投影阶段时盒子恢复可见', () => {
+    const bus = new StateBus();
+    const sim = new Simulator({ bus });
+    sim.setStage(STAGE.GEOMETRIC_PROJECTION);
+    sim.setStage(STAGE.MODE_DECOMPOSITION);
+    expect(sim.wellMesh.visible).toBe(true);
+    sim.dispose();
+  });
+
   it('setStage 到当前阶段为幂等空操作', () => {
     const bus = new StateBus();
     const sim = new Simulator({ bus });

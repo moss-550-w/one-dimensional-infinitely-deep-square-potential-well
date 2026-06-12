@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { stateBus } from './core/StateBus.js';
 import { Chapter1Scene } from './satellites/Chapter1/index.js';
 import { Chapter2Scene } from './satellites/Chapter2/index.js';
+import { Chapter3Scene } from './satellites/Chapter3/index.js';
 import './style.css';
 
 /**
@@ -116,7 +117,8 @@ manager.start();
 // 章节注册表：卫星空间按需加载/销毁（Claude.md 四·4）
 const CHAPTERS = {
   1: Chapter1Scene,
-  2: Chapter2Scene
+  2: Chapter2Scene,
+  3: Chapter3Scene
 };
 
 /** 切换到指定章节，销毁当前场景并加载目标场景。 */

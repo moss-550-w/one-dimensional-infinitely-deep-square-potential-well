@@ -11,7 +11,11 @@ import {
   squareWaveCoefficient,
   synthesizeHarmonics,
   fourierSquareWave,
-  gibbsPeak
+  gibbsPeak,
+  basisFunction,
+  basisProduct,
+  innerProduct,
+  partialInnerProduct
 } from './QuantumMath.js';
 
 describe('QuantumMath · 本征能量', () => {
@@ -149,5 +153,50 @@ describe('QuantumMath · 傅里叶方波与吉布斯现象', () => {
       phase: 0
     }));
     expect(synthesizeHarmonics(harmonics, 0.3)).toBeCloseTo(fourierSquareWave(3, 0.3), 12);
+  });
+});
+
+describe('QuantumMath · 希尔伯特内积与正交性', () => {
+  it('基函数 sin(nπx/L) 取值正确', () => {
+    expect(basisFunction(1, 0.5)).toBeCloseTo(1, 12); // sin(π/2)=1
+    expect(basisFunction(2, 0.5)).toBeCloseTo(0, 12); // sin(π)=0
+    expect(basisFunction(1, 0)).toBeCloseTo(0, 12);
+  });
+
+  it('basisProduct 为两基函数之积', () => {
+    const x = 0.37;
+    expect(basisProduct(1, 2, x)).toBeCloseTo(basisFunction(1, x) * basisFunction(2, x), 12);
+  });
+
+  it('内积归一：⟨n|n⟩ = 1', () => {
+    for (let n = 1; n <= 5; n++) {
+      expect(innerProduct(n, n)).toBeCloseTo(1, 6);
+    }
+  });
+
+  it('内积正交：⟨m|n⟩ = 0 (m≠n)', () => {
+    const pairs = [
+      [1, 2],
+      [1, 3],
+      [2, 3],
+      [2, 4],
+      [3, 5]
+    ];
+    for (const [m, n] of pairs) {
+      expect(innerProduct(m, n)).toBeCloseTo(0, 6);
+    }
+  });
+
+  it('部分内积在上限=L 时等于完整内积', () => {
+    expect(partialInnerProduct(2, 2, 1)).toBeCloseTo(innerProduct(2, 2), 6);
+    expect(partialInnerProduct(1, 2, 1)).toBeCloseTo(innerProduct(1, 2), 6);
+  });
+
+  it('正交对的部分内积中途非零、终点归零（正负相消）', () => {
+    // m≠n：积分到半程通常不为 0，到全程相消为 0
+    const mid = partialInnerProduct(1, 2, 0.5);
+    const full = partialInnerProduct(1, 2, 1);
+    expect(Math.abs(full)).toBeLessThan(1e-6);
+    expect(Math.abs(mid)).toBeGreaterThan(1e-3);
   });
 });

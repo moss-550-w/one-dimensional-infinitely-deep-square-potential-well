@@ -198,6 +198,55 @@ export function gibbsPeak(N, opts = {}) {
   return { x: bestX, value: bestV };
 }
 
+/* ===== 希尔伯特空间（第三章：无限的几何） ===== */
+
+/**
+ * 未归一化基函数 sin(nπx/L)。
+ * 区别于含 sqrt(2/L) 归一化因子的 eigenFunction —— 此处用于内积/正交性的几何演示。
+ * @param {number} n 量子数（正整数）
+ * @param {number} x 位置
+ * @param {{wellWidth?:number}} [opts]
+ * @returns {number}
+ */
+export function basisFunction(n, x, opts = {}) {
+  assertQuantumNumber(n);
+  const { wellWidth: L } = { ...DEFAULTS, ...opts };
+  return Math.sin((n * Math.PI * x) / L);
+}
+
+/**
+ * 两基函数乘积 sin(mπx/L)·sin(nπx/L)，用于正交性演示的乘积曲线。
+ */
+export function basisProduct(m, n, x, opts = {}) {
+  return basisFunction(m, x, opts) * basisFunction(n, x, opts);
+}
+
+/**
+ * 希尔伯特空间内积 ⟨m|n⟩ = (2/L)∫₀ᴸ sin(mπx/L)sin(nπx/L)dx（Claude.md 六·3）。
+ * 对正整数 m,n 解析等于 δ_mn（正交归一）；本函数以数值积分如实计算。
+ * @returns {number} m=n 时 ≈1；m≠n 时 ≈0
+ */
+export function innerProduct(m, n, opts = {}) {
+  assertQuantumNumber(m);
+  assertQuantumNumber(n);
+  const { wellWidth: L } = { ...DEFAULTS, ...opts };
+  return (2 / L) * integrate((x) => basisProduct(m, n, x, opts), 0, L);
+}
+
+/**
+ * 部分内积 (2/L)∫₀ᵘᵖᵖᵉʳ sin(mπx/L)sin(nπx/L)dx。
+ * 用于第三章"积分累加 → 0"的扫描动画：随 upper 从 0 推进到 L，
+ * 正负面积逐步相消，最终结算到 δ_mn。
+ * @param {number} upper 积分上限
+ */
+export function partialInnerProduct(m, n, upper, opts = {}) {
+  assertQuantumNumber(m);
+  assertQuantumNumber(n);
+  const { wellWidth: L } = { ...DEFAULTS, ...opts };
+  if (upper <= 0) return 0;
+  return (2 / L) * integrate((x) => basisProduct(m, n, x, opts), 0, upper);
+}
+
 /** 量子数校验：必须为正整数。 */
 function assertQuantumNumber(n) {
   if (!Number.isInteger(n) || n < 1) {

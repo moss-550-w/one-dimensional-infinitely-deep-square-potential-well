@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ClassicalField } from './ClassicalField.js';
 import { ModeDecompositionField } from './ModeDecompositionField.js';
+import { HilbertProjectionField } from './HilbertProjectionField.js';
 
 /**
  * 核心模拟器阶段枚举（Claude.md 5.2）。
@@ -82,9 +83,16 @@ export class Simulator {
       this.stageModule = new ClassicalField({ halfExtents: this.half, tier: this.tier });
     } else if (stage === STAGE.MODE_DECOMPOSITION) {
       this.stageModule = new ModeDecompositionField({ halfExtents: this.half });
+    } else if (stage === STAGE.GEOMETRIC_PROJECTION) {
+      this.stageModule = new HilbertProjectionField({ halfExtents: this.half });
     }
-    // 阶段 2–3 的可视化模块将在 M3–M4 接入
+    // 阶段 3 的可视化模块将在 M4 接入
     if (this.stageModule) this.group.add(this.stageModule.object3d);
+
+    // 阶段2「切换视角」到抽象投影空间：盒子隐去，投影占据中央（design.md 阶段2）
+    const showWell = stage !== STAGE.GEOMETRIC_PROJECTION;
+    this.wellMesh.visible = showWell;
+    this.wellEdges.visible = showWell;
   }
 
   _disposeStageModule() {

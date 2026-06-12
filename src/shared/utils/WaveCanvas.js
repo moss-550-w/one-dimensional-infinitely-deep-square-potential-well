@@ -152,6 +152,41 @@ export class WaveCanvas {
     ctx.fillText(label, px + 12, py - 8);
   }
 
+  /**
+   * 填充曲线与 y=0 之间的区域，正/负值用不同颜色（用于正交性演示的"正负面积相消"）。
+   * @param {(x:number)=>number} fn
+   * @param {object} [opts]
+   * @param {number} [opts.upper] 仅填充到该 x（扫描动画），默认整段
+   */
+  drawFilledCurve(
+    fn,
+    {
+      posColor = 'rgba(34,197,94,0.35)',
+      negColor = 'rgba(239,68,68,0.35)',
+      samples = 500,
+      upper = null
+    } = {}
+  ) {
+    const { ctx } = this;
+    const [x0, x1] = this.xRange;
+    const top = upper ?? x1;
+    const y0px = this.yToPx(0);
+    for (let i = 0; i < samples; i++) {
+      const xa = x0 + (i / samples) * (top - x0);
+      const xb = x0 + ((i + 1) / samples) * (top - x0);
+      const ya = fn(xa);
+      const yb = fn(xb);
+      ctx.fillStyle = (ya + yb) / 2 >= 0 ? posColor : negColor;
+      ctx.beginPath();
+      ctx.moveTo(this.xToPx(xa), y0px);
+      ctx.lineTo(this.xToPx(xa), this.yToPx(ya));
+      ctx.lineTo(this.xToPx(xb), this.yToPx(yb));
+      ctx.lineTo(this.xToPx(xb), y0px);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
   /** 提交本帧绘制到 GPU 纹理。 */
   commit() {
     this.texture.needsUpdate = true;

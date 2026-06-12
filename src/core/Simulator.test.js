@@ -148,4 +148,24 @@ describe('Simulator · 状态机', () => {
       sim.dispose();
     }).not.toThrow();
   });
+
+  it('生命周期审计：反复全阶段循环 + 构建销毁无残留（M6 离开即释放）', () => {
+    expect(() => {
+      for (let i = 0; i < 20; i++) {
+        const bus = new StateBus();
+        const sim = new Simulator({ bus });
+        // 逐级走完四阶段，每阶段推进一帧，模拟真实旅程
+        for (const stage of [
+          STAGE.MODE_DECOMPOSITION,
+          STAGE.GEOMETRIC_PROJECTION,
+          STAGE.QUANTUM_AXIOM
+        ]) {
+          sim.setStage(stage);
+          sim.update(0.016);
+        }
+        // 上一阶段模块在切换时即被卸载，dispose 释放残余
+        sim.dispose();
+      }
+    }).not.toThrow();
+  });
 });

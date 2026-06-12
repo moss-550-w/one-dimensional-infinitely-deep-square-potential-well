@@ -1,11 +1,6 @@
 import * as THREE from 'three';
 import { stateBus } from './core/StateBus.js';
-import { Chapter1Scene } from './satellites/Chapter1/index.js';
-import { Chapter2Scene } from './satellites/Chapter2/index.js';
-import { Chapter3Scene } from './satellites/Chapter3/index.js';
-import { Chapter4Scene } from './satellites/Chapter4/index.js';
-import { Chapter5Scene } from './satellites/Chapter5/index.js';
-import { Chapter6Scene } from './satellites/Chapter6/index.js';
+import { PerfMonitor } from './core/PerfMonitor.js';
 import './style.css';
 
 /**
@@ -78,6 +73,15 @@ class SceneManager {
     else if (cores <= 4) tier = 'mid';
     stateBus.setState({ performanceTier: tier, isMobile });
     console.info(`[SceneManager] 性能分级: ${tier} (cores=${cores}, mobile=${isMobile})`);
+
+    // 运行时帧率监测：持续吃力则在静态探测基础上进一步降级，全站可读（plan.md M6）
+    this.perf = new PerfMonitor({
+      tier,
+      onDowngrade: (newTier, fps) => {
+        stateBus.setState({ performanceTier: newTier });
+        console.warn(`[PerfMonitor] 帧率持续偏低(${fps.toFixed(0)}fps)，降级 → ${newTier}`);
+      }
+    });
   }
 
   /**
@@ -107,6 +111,8 @@ class SceneManager {
   _tick() {
     const dt = this.clock.getDelta();
     const elapsed = this.clock.elapsedTime;
+    // 帧率监测与自动降级（结果经 StateBus 广播，场景下次构建即读到新分级）
+    this.perf?.sample(dt);
     if (this.activeScene) this.activeScene.update(dt, elapsed);
     this.renderer.render(this.scene, this.camera);
   }
@@ -117,26 +123,38 @@ const canvas = document.getElementById('app-canvas');
 const manager = new SceneManager(canvas);
 manager.start();
 
-// 章节注册表：卫星空间按需加载/销毁（Claude.md 四·4）
-const CHAPTERS = {
-  1: Chapter1Scene,
-  2: Chapter2Scene,
-  3: Chapter3Scene,
-  4: Chapter4Scene,
-  5: Chapter5Scene,
-  6: Chapter6Scene
+// 章节动态加载表：每章一个独立异步 chunk，进入时才下载（Claude.md 四·4 / plan.md M6）。
+// 动态 import() 让首屏只加载第一章 + 核心，其余章节按需拉取，显著缩小首包。
+const CHAPTER_LOADERS = {
+  1: () => import('./satellites/Chapter1/index.js').then((m) => m.Chapter1Scene),
+  2: () => import('./satellites/Chapter2/index.js').then((m) => m.Chapter2Scene),
+  3: () => import('./satellites/Chapter3/index.js').then((m) => m.Chapter3Scene),
+  4: () => import('./satellites/Chapter4/index.js').then((m) => m.Chapter4Scene),
+  5: () => import('./satellites/Chapter5/index.js').then((m) => m.Chapter5Scene),
+  6: () => import('./satellites/Chapter6/index.js').then((m) => m.Chapter6Scene)
 };
 
-/** 切换到指定章节，销毁当前场景并加载目标场景。 */
-function navigateTo(n) {
-  const Ctor = CHAPTERS[n];
-  if (!Ctor) {
+// 导航代际计数：防止快速连点导致旧章节异步加载完成后覆盖新章节（竞态保护）。
+let _navToken = 0;
+
+/** 切换到指定章节：异步加载其 chunk，销毁当前场景并加载目标场景。 */
+async function navigateTo(n) {
+  const loader = CHAPTER_LOADERS[n];
+  if (!loader) {
     console.warn(`[main] 第 ${n} 章尚未实现，导航忽略。`);
     return;
   }
-  manager.load(new Ctor());
-  stateBus.setState({ currentChapter: n });
-  console.info(`[main] 已进入第 ${n} 章。`);
+  const token = ++_navToken;
+  try {
+    const Ctor = await loader();
+    // 加载期间用户又点了别的章节 → 丢弃这次过期结果
+    if (token !== _navToken) return;
+    manager.load(new Ctor());
+    stateBus.setState({ currentChapter: n });
+    console.info(`[main] 已进入第 ${n} 章。`);
+  } catch (err) {
+    console.error(`[main] 第 ${n} 章加载失败:`, err);
+  }
 }
 
 // 统一章节导航入口：任意场景通过 bus.emit('navigate', { to }) 请求切换

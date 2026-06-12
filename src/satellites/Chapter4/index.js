@@ -10,12 +10,9 @@ import {
   eigenEnergy,
   energyProbabilities,
   collapseToEigenstate,
-  isCoefficientSetNormalized,
-  gaussianPacket,
-  gaussianMomentumStd,
-  momentumDensity,
-  weightedStd
+  isCoefficientSetNormalized
 } from '../../core/QuantumMath.js';
+import { ComputeClient } from '../../core/ComputeClient.js';
 
 const AXIS_COLORS = ['#3b82f6', '#8b5cf6', '#22d3ee'];
 const MOMENTUM_P = 140; // 动量轴半幅 [-P, P]
@@ -42,12 +39,17 @@ export class Chapter4Scene extends SceneBase {
     this._posWave = null;
     this._momWave = null;
     this._knob = null;
+    this._computeSeq = 0; // 动量谱异步结果代际，丢弃过期回包
   }
 
   onInit(ctx) {
     const { camera, renderer, bus } = ctx;
     this.bus = bus;
     this.renderer = renderer;
+
+    // 计算客户端：动量谱重计算交给 Worker，主线程不掉帧；低端分级强制同步降级。
+    const tier = bus.getState().performanceTier;
+    this.compute = new ComputeClient({ forceSync: tier === 'low' });
 
     // 核心模拟器 → 阶段3（量子公理）。解锁测量假设并持久化进度。
     this.simulator = new Simulator({ bus });
@@ -98,6 +100,7 @@ export class Chapter4Scene extends SceneBase {
     this._panels.length = 0;
     this._pulse?.kill();
     this._knob?.dispose();
+    this.compute?.dispose();
     this.simulator.dispose();
     this._posWave?.dispose();
     this._momWave?.dispose();
@@ -456,68 +459,67 @@ export class Chapter4Scene extends SceneBase {
     }
   }
 
-  /** 重绘双谱并计算 Δx·Δp。 */
+  /**
+   * 重绘双谱并计算 Δx·Δp。
+   * 重计算（121 动量点 × Simpson 积分 + 标准差）交给 ComputeClient——
+   * 高端走 Worker 不掉帧，低端/无 Worker 自动同步降级（行为一致）。
+   */
   _drawMomentumLab() {
     const sigma = this._sigma;
     const x0 = 0.5;
-    const psi = (x) => gaussianPacket(x, x0, sigma);
+    const seq = ++this._computeSeq; // 代际标记：滑动旋钮快速触发时只渲染最新结果
 
-    // 位置谱：|ψ(x)|²，归一到峰值=1 仅作形状展示
-    let posMax = 0;
-    for (let i = 0; i <= 200; i++) {
-      const v = psi(i / 200) ** 2;
-      if (v > posMax) posMax = v;
-    }
-    posMax = posMax || 1;
-    const posFn = (x) => (psi(x) ** 2) / posMax;
+    this.compute
+      .run('momentumSpectrum', {
+        sigma,
+        x0,
+        pMax: MOMENTUM_P,
+        momentumSamples: 120,
+        positionSamples: 200,
+        integrationSteps: 240
+      })
+      .then((r) => {
+        // 过期回包丢弃；场景已销毁（画布释放）亦丢弃
+        if (seq !== this._computeSeq || !this._posWave || !this._momWave) return;
+        this._renderSpectrum(r);
+      })
+      .catch((err) => console.error('[Chapter4] 动量谱计算失败:', err));
+  }
+
+  /** 用计算结果渲染位置/动量双谱与不确定度读数（纯渲染，数学已在内核完成）。 */
+  _renderSpectrum(r) {
+    const { positionDensity, positionPeak, momentumDensity, momentumPeak, pMax } = r;
+
+    // 位置谱 |ψ(x)|²，归一到峰值=1 仅作形状展示
+    const posN = positionDensity.length - 1;
+    const posFn = (x) => {
+      const i = Math.max(0, Math.min(posN, Math.round(x * posN)));
+      return positionDensity[i] / positionPeak;
+    };
     this._posWave.clear();
-    this._posWave.drawFilledCurve(posFn, { posColor: 'rgba(59,130,246,0.30)', samples: 200 });
-    this._posWave.drawCurve(posFn, { color: '#3b82f6', width: 2.5, samples: 200 });
+    this._posWave.drawFilledCurve(posFn, { posColor: 'rgba(59,130,246,0.30)', samples: posN });
+    this._posWave.drawCurve(posFn, { color: '#3b82f6', width: 2.5, samples: posN });
     this._posWave.commit();
 
-    // 动量谱：预采样 |φ(p)|²（数值傅里叶变换），插值绘制 + 求标准差
-    const N = 120;
-    const dens = new Float64Array(N + 1);
-    const ps = new Array(N + 1);
-    let momMax = 0;
-    for (let i = 0; i <= N; i++) {
-      const p = -MOMENTUM_P + (2 * MOMENTUM_P * i) / N;
-      ps[i] = p;
-      const d = momentumDensity(psi, p, 0, 1, { steps: 240 });
-      dens[i] = d;
-      if (d > momMax) momMax = d;
-    }
-    momMax = momMax || 1;
+    // 动量谱 |φ(p)|²，线性插值绘制
+    const momN = momentumDensity.length - 1;
     const momFn = (p) => {
-      const t = ((p + MOMENTUM_P) / (2 * MOMENTUM_P)) * N;
-      const i = Math.max(0, Math.min(N - 1, Math.floor(t)));
+      const t = ((p + pMax) / (2 * pMax)) * momN;
+      const i = Math.max(0, Math.min(momN - 1, Math.floor(t)));
       const f = t - i;
-      return (dens[i] * (1 - f) + dens[i + 1] * f) / momMax;
+      return (momentumDensity[i] * (1 - f) + momentumDensity[i + 1] * f) / momentumPeak;
     };
     this._momWave.clear();
     this._momWave.drawFilledCurve(momFn, { posColor: 'rgba(139,92,246,0.30)', samples: 240 });
     this._momWave.drawCurve(momFn, { color: '#8b5cf6', width: 2.5, samples: 240 });
     this._momWave.commit();
 
-    // 数值不确定度：位置由 [0,1] 网格、动量由动量网格的加权标准差
-    const xs = [];
-    const wx = [];
-    for (let i = 0; i <= 200; i++) {
-      const x = i / 200;
-      xs.push(x);
-      wx.push(psi(x) ** 2);
-    }
-    const dx = weightedStd(xs, wx).std;
-    const dp = weightedStd(ps, Array.from(dens)).std;
-    const product = dx * dp;
-    const theoryDp = gaussianMomentumStd(sigma); // ħ/(2σ)
-
     this._uncertEl.innerHTML = `
-      Δx ≈ <b style="color:#93c5fd">${dx.toFixed(3)}</b> &nbsp;
-      Δp ≈ <b style="color:#c4b5fd">${dp.toFixed(2)}</b><br/>
-      Δx·Δp ≈ <b style="color:#fff">${product.toFixed(3)}</b>
+      Δx ≈ <b style="color:#93c5fd">${r.dx.toFixed(3)}</b> &nbsp;
+      Δp ≈ <b style="color:#c4b5fd">${r.dp.toFixed(2)}</b><br/>
+      Δx·Δp ≈ <b style="color:#fff">${r.product.toFixed(3)}</b>
       <span style="color:#94a3b8">（下界 ħ/2 = 0.5）</span><br/>
-      <span style="font-size:11px;color:#64748b">理论 Δp=ħ/2σ=${theoryDp.toFixed(2)}；压缩 Δx 必使 Δp 增大。</span>`;
+      <span style="font-size:11px;color:#64748b">理论 Δp=ħ/2σ=${r.theoryDp.toFixed(2)}；压缩 Δx 必使 Δp 增大。</span>`;
   }
 }
 

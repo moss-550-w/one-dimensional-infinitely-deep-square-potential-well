@@ -11,6 +11,16 @@ export default defineConfig({
   },
   build: {
     target: 'es2020',
-    sourcemap: true
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        // 手动分块：把体积大、低频变动的第三方库拆离主包，
+        // 配合 main.js 中章节的动态 import() 按需加载（plan.md M6）。
+        manualChunks: {
+          three: ['three', 'three/examples/jsm/controls/OrbitControls.js'],
+          gsap: ['gsap']
+        }
+      }
+    }
   }
 });

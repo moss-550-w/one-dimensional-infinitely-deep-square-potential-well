@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>一维无限深方势阱 · 思想之旅</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+</head>
+<body>
+  <!-- 3D 主画布：核心模拟器与卫星场景共享此 WebGL 上下文 -->
+  <canvas id="app-canvas"></canvas>
+
+  <!-- UI 叠加层：玻璃拟态面板挂载点，绝对定位于画布之上，不干扰 3D 渲染 -->
+  <div id="ui-layer"></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

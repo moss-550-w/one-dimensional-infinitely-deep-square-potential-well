@@ -112,7 +112,10 @@ const canvas = document.getElementById('app-canvas');
 const manager = new SceneManager(canvas);
 manager.start();
 
+// 加载第一章（核心模拟器阶段0：经典混沌）
+manager.load(new Chapter1Scene());
+
 // 暴露到全局，便于开发期调试与后续章节挂载
 window.__app = { manager, stateBus };
 
-console.info('[main] 核心管线就绪 — M0 空场景渲染中（深空蓝）。');
+console.info('[main] 核心管线就绪 — 第一章「经典混沌」已加载。');

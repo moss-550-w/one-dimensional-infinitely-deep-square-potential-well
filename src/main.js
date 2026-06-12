@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { stateBus } from './core/StateBus.js';
+import { Chapter1Scene } from './satellites/Chapter1/index.js';
 import './style.css';
 
 /**

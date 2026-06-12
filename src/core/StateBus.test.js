@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { StateBus } from '../StateBus.js';
+import { StateBus } from './StateBus.js';
 
 describe('StateBus', () => {
   /** @type {StateBus} */

@@ -3,7 +3,12 @@ import glsl from 'vite-plugin-glsl';
 
 // GLSL 导入插件用于直接 import .vert/.frag/.glsl 着色器源码；
 // Web Worker 由 Vite 原生支持（new Worker(new URL(...), { type: 'module' })）。
-export default defineConfig({
+//
+// base：GitHub Pages 项目站点部署在 /<repo>/ 子路径下，资源需带此前缀。
+// 本地 dev/test 用根路径 '/'，仅生产构建（Pages）注入仓库名前缀。
+const REPO = 'one-dimensional-infinitely-deep-square-potential-well';
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? `/${REPO}/` : '/',
   plugins: [glsl()],
   server: {
     host: true,
@@ -23,4 +28,4 @@ export default defineConfig({
       }
     }
   }
-});
+}));
